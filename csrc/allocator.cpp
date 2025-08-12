@@ -43,7 +43,7 @@ void FTensorAllocator::destroy() {
   std::lock_guard<std::mutex> lock(mtx_);
   ftensors_.clear();
   contiguous_kv_tensor_.reset();
-  zero_page_.reset();
+  // zero_page_.reset();
 }
 
 void FTensorAllocator::init(const std::string &dev_str, size_t page_size,
@@ -97,10 +97,10 @@ FTensorAllocator::create_kv_tensors(size_t size, torch::Dtype dtype,
     // For contiguous layout, we use compound page which groups all layers
     // together for a single page.
     kPageSize *= num_layers * 2;
-    zero_page_ = make_shared_page(dev_, ZERO_PAGE_ID);
+    // zero_page_ = make_shared_page(dev_, ZERO_PAGE_ID);
     return create_kv_tensors_contiguous_(size, dtype, dev_str, num_layers);
   } else {
-    zero_page_ = make_shared_page(dev_, ZERO_PAGE_ID);
+    // zero_page_ = make_shared_page(dev_, ZERO_PAGE_ID);
     return create_kv_tensors_per_layer_(kv_prefix, size, dtype, dev_str,
                                         num_layers);
   }

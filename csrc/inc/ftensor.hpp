@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <unordered_map>
 
 #include <torch/extension.h>
@@ -21,6 +22,12 @@ public:
 
   inline torch::Tensor get_tensor() noexcept { return tensor_; }
 
+  // [GVM] swap out `size` bytes from the tensor.
+  bool reclaim_handler(size_t size);
+
+  // [GVM] call UVM prefetch to host or internal swap interface.
+  bool swapout(void *addr, size_t size);
+
 private:
   bool map_(Page *page, offset_t offset, bool set_access = true);
   bool set_access_(generic_ptr_t addr, size_t size);
@@ -34,7 +41,8 @@ private:
   std::shared_ptr<Page> zero_page_;
 
   torch::Tensor tensor_;
-  std::unordered_map<page_id_t, std::unique_ptr<Page>> mapping_;
+  std::unordered_map<page_id_t, std::unique_ptr<Page>> mapped_pages_;
+  std::set<page_id_t> unmapped_pages_;
 };
 
 } // namespace kvcached
