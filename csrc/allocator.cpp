@@ -2,6 +2,9 @@
 #include <mutex>
 #include <torch/extension.h>
 #include <unordered_map>
+#include <string>
+#include <fstream>
+#include <signal.h>
 
 #include "allocator.hpp"
 #include "constants.hpp"
@@ -28,10 +31,36 @@ static inline std::shared_ptr<Page> make_shared_page(const torch::Device &dev,
   return nullptr;
 }
 
+static void signal_handler(int signo) {
+  if (signo == SIGRTMIN + 15) {
+    std::ifstream memory_recommend_file("/sys/kernel/debug/nvidia-uvm/processes/" + std::to_string((int)getpid()) + "/0/memory.recommend");
+    std::ifstream memory_current_file("/sys/kernel/debug/nvidia-uvm/processes/" + std::to_string((int)getpid()) + "/0/memory.current");
+
+    if (!memory_recommend_file.is_open() || !memory_current_file.is_open()) {
+      std::cerr << "Failed to open cgroup file" << std::endl;
+      return;
+    }
+
+    std::uint64_t memory_recommend;
+    std::uint64_t memory_current;
+
+    memory_recommend_file >> memory_recommend;
+    memory_current_file >> memory_current;
+
+    memory_recommend_file.close();
+    memory_current_file.close();
+
+    if (memory_current > memory_recommend) {
+      FTensorAllocator::global_allocator()->reclaim_handler(memory_current - memory_recommend);
+    }
+  }
+}
+
 FTensorAllocator::FTensorAllocator(const torch::Device &device,
                                    bool contiguous_layout)
     : dev_(device), num_layers_(0), contiguous_layout_(contiguous_layout),
       kv_tensor_size_per_layer_(0) {
+  signal(SIGRTMIN + 15, signal_handler);
   if (dev_.is_cuda()) {
     init_cuda_();
   }
@@ -257,6 +286,29 @@ void FTensorAllocator::free_ftensor_(torch::Tensor &ftensor) {
     return;
   }
   ftensors_.erase(name);
+}
+
+size_t FTensorAllocator::reclaim_handler(size_t size) {
+  size_t tensor_reclaim_size;
+  size_t to_reclaim_count = this->ftensors_.size();
+  size_t reclaimed_size = 0;
+
+  if (this->contiguous_kv_tensor_) {
+    reclaimed_size += this->contiguous_kv_tensor_->reclaim_handler(size);
+  } else {
+    std::cout << "Size is " << size << " to reclaim count is " << to_reclaim_count << std::endl;
+    for (auto & [name, ftensor] : this->ftensors_) {
+      if (reclaimed_size >= size || to_reclaim_count == 0) {
+        break;
+      }
+
+      tensor_reclaim_size = (size - reclaimed_size) / to_reclaim_count;
+      reclaimed_size += ftensor->reclaim_handler(tensor_reclaim_size);
+      to_reclaim_count--;
+    }
+  }
+
+  return reclaimed_size;
 }
 
 void FTensorAllocator::init_cuda_() {

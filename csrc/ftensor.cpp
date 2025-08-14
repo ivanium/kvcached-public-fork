@@ -78,7 +78,7 @@ FTensor::~FTensor() {
   }
 }
 
-bool FTensor::reclaim_handler(size_t size) {
+size_t FTensor::reclaim_handler(size_t size) {
   size_t swapped_size = 0;
   while (swapped_size < size && unmapped_pages_.size() > 0) {
     auto page_id = *unmapped_pages_.begin();
@@ -89,12 +89,12 @@ bool FTensor::reclaim_handler(size_t size) {
     unmapped_pages_.erase(page_id);
     swapped_size += kPageSize;
   }
-  return swapped_size == size;
+  return swapped_size;
 }
 
 bool FTensor::swapout(void *addr, size_t size) {
   // UVM prefetch to host.
-  CHECK_RT(cudaMemPrefetchAsync(addr, size, cudaMemLocationTypeHost));
+  CHECK_RT(cudaMemPrefetchAsync(addr, size, cudaCpuDeviceId));
   return true;
 }
 

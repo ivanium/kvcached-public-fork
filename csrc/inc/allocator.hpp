@@ -36,6 +36,8 @@ public:
   static FTensorAllocator *global_allocator();
   void destroy();
 
+  size_t reclaim_handler(size_t size);
+
 private:
   // Raw FTensor interfaces. Must call with lock.
   static std::string get_anon_tensor_name_();

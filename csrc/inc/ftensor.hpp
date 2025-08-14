@@ -23,7 +23,7 @@ public:
   inline torch::Tensor get_tensor() noexcept { return tensor_; }
 
   // [GVM] swap out `size` bytes from the tensor.
-  bool reclaim_handler(size_t size);
+  size_t reclaim_handler(size_t size);
 
   // [GVM] call UVM prefetch to host or internal swap interface.
   bool swapout(void *addr, size_t size);
